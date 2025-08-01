@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+
+
+/* Global styles */
+#html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Layout containers */
+body {
+  justify-content: center;
+  /* background: url('https://i.pinimg.com/736x/d4/03/e3/d403e3579566298617968224e02323fa.jpg') no-repeat center center fixed;
+  background-size: cover;
+  position: relative;   */
+}
+
+body::before {
+  content: '';
+  position: relative;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Gradient overlay - adjust colors/opacity as needed */
+ background: linear-gradient(
+    to top bottom,
+    rgba(26, 27, 32),    
+    rgb(26, 27, 32) 25%,
+    rgb(26, 27, 32),
+    rgb(26, 27, 32)      
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 1;
+}
+
