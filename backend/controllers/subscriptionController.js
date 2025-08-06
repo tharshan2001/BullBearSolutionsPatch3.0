@@ -136,13 +136,24 @@ export const subscribeToProduct = async (req, res) => {
 export const getUserSubscriptions = async (req, res) => {
   try {
     const userId = req.user._id;
-    const subscriptions = await Subscription.find({ user: userId }).populate('product').lean();
-    return res.status(200).json({ success: true, subscriptions });
+    const subscriptions = await Subscription.find({ user: userId })
+      .populate({
+        path: 'product',
+        select: 'Title Price isAvailable isHidden'
+      })
+      .lean();
+
+    const filtered = subscriptions.filter(sub => 
+      sub.product && sub.product.isAvailable && !sub.product.isHidden
+    );
+
+    return res.status(200).json({ success: true, subscriptions: filtered });
   } catch (error) {
     console.error('Get user subscriptions error:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
 
 // Renew
 export const renewSubscription = async (req, res) => {
@@ -353,15 +364,23 @@ export const deactivateSubscription = async (req, res) => {
 // Get all subscriptions (admin only)
 export const getAllSubscriptions = async (req, res) => {
   try {
-
     const subscriptions = await Subscription.find()
-      .populate('user', 'email username')  // get user email and username (or other fields)
-      .populate('product', 'Title Price') // get product title and price (or other fields)
+      .populate({
+        path: 'product',
+        select: 'Title Price isAvailable isHidden'
+      })
+      .populate('user', 'email username')
       .lean();
 
-    return res.status(200).json({ success: true, subscriptions });
+    // Filter only subscriptions with available & visible products
+    const filtered = subscriptions.filter(sub => 
+      sub.product && sub.product.isAvailable && !sub.product.isHidden
+    );
+
+    return res.status(200).json({ success: true, subscriptions: filtered });
   } catch (error) {
     console.error('Get all subscriptions error:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
