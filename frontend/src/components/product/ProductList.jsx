@@ -27,7 +27,7 @@ const ProductList = () => {
           withCredentials: true,
         });
 
-        setProducts(res.data);
+        setProducts(res.data || []);
         setCurrentIndex(0);
       } catch (err) {
         setError(err.message || "Failed to fetch products");
@@ -42,15 +42,18 @@ const ProductList = () => {
   }, [authLoading]);
 
   const handleNext = () => {
+    if (products.length <= 1) return;
     setCurrentIndex((prev) => (prev + 1) % products.length);
   };
 
   const handlePrev = () => {
+    if (products.length <= 1) return;
     setCurrentIndex((prev) => (prev - 1 + products.length) % products.length);
   };
 
   const handleSubscribe = () => {
     const currentProduct = products[currentIndex];
+    if (!currentProduct?.slug) return;
     navigate(`/products/detailed/${currentProduct.slug}`);
   };
 
@@ -78,14 +81,18 @@ const ProductList = () => {
     );
   }
 
-  const currentProduct = products[currentIndex];
+  const currentProduct = products[currentIndex] || {};
+  
+  // Safely get image URL
   const imageUrl = currentProduct.image
-    ? `${IMAGE_BASE_URL}${currentProduct.image.startsWith("/") ? "" : "/"}${
-        currentProduct.image
-      }`
+    ? `${IMAGE_BASE_URL}${currentProduct.image.startsWith("/") ? "" : "/"}${currentProduct.image}`
     : null;
-  const title =
-    currentProduct.Title || currentProduct.title || currentProduct.name;
+  
+  // Safely get title with fallbacks
+  const title = currentProduct.Title || currentProduct.title || currentProduct.name || "Untitled Product";
+  
+  // Safely get price
+  const price = currentProduct.Price || currentProduct.price || "N/A";
 
   return (
     <div className="text-white px-6 mb-10 mt-8">
@@ -169,7 +176,7 @@ const ProductList = () => {
                         inline-block
                       "
                     >
-                      USDT {currentProduct.Price || currentProduct.price}
+                      USDT {price}
                     </p>
                   </div>
                 </div>
