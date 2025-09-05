@@ -21,6 +21,7 @@ import "react-phone-number-input/style.css";
 import { isValidPhoneNumber } from "react-phone-number-input";
 import logo from "../assets/v3.png";
 
+
 // API endpoints
 const API = {
   SEND_OTP: `${import.meta.env.VITE_API_BASE_URL}/api/temp/send-otp`,
@@ -78,7 +79,32 @@ const Register = () => {
       setOtp(newOtp);
 
       if (value && index < 5) {
-        inputRefs.current[index + 1].focus();
+        inputRefs.current[index + 1]?.focus();
+      }
+    }
+  };
+
+  const handlePaste = (e, index) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").trim();
+
+    if (/^\d+$/.test(pastedData)) {
+      const digits = pastedData.split("").slice(0, 6);
+      const newOtp = [...otp];
+
+      // Fill OTP array starting from the current index
+      digits.forEach((digit, i) => {
+        if (index + i < 6) {
+          newOtp[index + i] = digit;
+        }
+      });
+
+      setOtp(newOtp);
+
+      // Focus the next empty input after the pasted digits
+      const nextIndex = Math.min(index + digits.length, 5);
+      if (inputRefs.current[nextIndex]) {
+        inputRefs.current[nextIndex].focus();
       }
     }
   };
@@ -285,6 +311,8 @@ const Register = () => {
             onFinish={onBasicInfoSubmit}
             loading={otpLoading}
             apiErrors={apiErrors}
+            navigate={navigate}
+
           />
         );
       case STEPS.OTP_VERIFICATION:
@@ -294,6 +322,7 @@ const Register = () => {
             otp={otp}
             timeLeft={timeLeft}
             handleOtpChange={handleOtpChange}
+            handlePaste={handlePaste}
             verifyOtp={verifyOtp}
             resendOtp={resendOtp}
             formatTime={formatTime}
@@ -418,7 +447,7 @@ const Register = () => {
 };
 
 // Sub-components
-const BasicInfoForm = ({ form, onFinish, loading, apiErrors }) => (
+const BasicInfoForm = ({ form, onFinish, loading, apiErrors,navigate }) => (
   <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
     <Form.Item
       label={<span className="text-white text-sm">Full Name</span>}
@@ -535,6 +564,16 @@ const BasicInfoForm = ({ form, onFinish, loading, apiErrors }) => (
     >
       Continue
     </Button>
+
+    <div className="flex justify-between text-white text-xs mt-6">
+      <span>Already have an account ?</span>
+      <span
+        className="text-[#33eed5] cursor-pointer hover:none"
+        onClick={() => navigate("/login")}
+      >
+        Login Now
+      </span>
+    </div>
   </Form>
 );
 
@@ -543,6 +582,7 @@ const OTPVerificationStep = ({
   otp,
   timeLeft,
   handleOtpChange,
+  handlePaste,
   verifyOtp,
   resendOtp,
   formatTime,
@@ -565,15 +605,20 @@ const OTPVerificationStep = ({
           {otp.map((digit, index) => (
             <Input
               key={index}
-              ref={(el) => (inputRefs.current[index] = el)}
+              ref={(el) => {
+                if (el) {
+                  inputRefs.current[index] = el;
+                }
+              }}
               value={digit}
               maxLength={1}
               onChange={(e) => handleOtpChange(index, e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Backspace" && !digit && index > 0) {
-                  inputRefs.current[index - 1].focus();
+                  inputRefs.current[index - 1]?.focus();
                 }
               }}
+              onPaste={(e) => handlePaste(e, index)}
               style={{
                 width: "40px",
                 height: "50px",

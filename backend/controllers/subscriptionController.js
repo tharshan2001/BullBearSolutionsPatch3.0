@@ -272,16 +272,30 @@ export const checkUserSubscription = async (req, res) => {
   }
 };
 
+
 export const getSubscriptionsByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
-    const subscriptions = await Subscription.find({ user: userId }).populate('product').lean();
-    return res.status(200).json({ success: true, subscriptions });
+
+    // Populate product only if available & visible
+    const subscriptions = await Subscription.find({ user: userId })
+      .populate({
+        path: 'product',
+        match: { isAvailable: true, isHidden: false }, // filter here
+        select: 'Title Price isAvailable isHidden image'
+      })
+      .lean();
+
+    // Only return subscriptions where product exists
+    const filtered = subscriptions.filter(sub => sub.product);
+
+    return res.status(200).json({ success: true, subscriptions: filtered });
   } catch (error) {
     console.error('Get subscriptions by userId error:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
 
 // Activate by admin
 export const updateSubscriptionToActive = async (req, res) => {

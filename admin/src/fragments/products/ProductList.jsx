@@ -8,6 +8,25 @@ import CreateProduct from './CreateProduct';
 import { FaSpinner, FaExclamationTriangle, FaMoneyCheck, FaSearch, FaPlus } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
+// Move axios.create outside the component to prevent recreation on every render
+const API = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+API.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response && error.response.status === 401) {
+      // Error will be handled by individual components
+    }
+    return Promise.reject(error);
+  }
+);
+
 const ProductList = () => {
   const [socket, setSocket] = useState(null);
   const [error, setError] = useState(null);
@@ -15,24 +34,6 @@ const ProductList = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [showPopup, setShowPopup] = useState(false);
-
-  const API = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL,
-    withCredentials: true,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  API.interceptors.response.use(
-    response => response,
-    error => {
-      if (error.response && error.response.status === 401) {
-        setError('Session expired. Please log in again.');
-      }
-      return Promise.reject(error);
-    }
-  );
 
   const {
     data: products = [],
@@ -71,23 +72,34 @@ const ProductList = () => {
     onSuccess: () => {
       toast.success('Product deleted successfully');
     },
-    onSettled: () => {
-      queryClient.invalidateQueries(['products']);
-    },
+    // Removed onSettled invalidateQueries - optimistic update is sufficient
   });
 
   const editMutation = useMutation({
     mutationFn: (updatedProduct) =>
       API.put(`/api/products/update/${updatedProduct._id}`, updatedProduct),
+    onMutate: async (updatedProduct) => {
+      await queryClient.cancelQueries(['products']);
+      const previous = queryClient.getQueryData(['products']);
+      queryClient.setQueryData(['products'], old =>
+        old.map(product =>
+          product._id === updatedProduct._id ? { ...product, ...updatedProduct } : product
+        )
+      );
+      return { previous };
+    },
+    onError: (err, updatedProduct, context) => {
+      setError(err.response?.data?.message || 'Failed to update product');
+      toast.error(err.response?.data?.message || 'Failed to update product');
+      if (context?.previous) {
+        queryClient.setQueryData(['products'], context.previous);
+      }
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries(['products']);
       setError(null);
       toast.success('Product updated successfully');
     },
-    onError: (err) => {
-      setError(err.response?.data?.message || 'Failed to update product');
-      toast.error(err.response?.data?.message || 'Failed to update product');
-    },
+    // Removed invalidateQueries - optimistic update is sufficient
   });
 
   useEffect(() => {
@@ -110,10 +122,24 @@ const ProductList = () => {
       );
     };
 
+    const handleProductCreated = (newProduct) => {
+      queryClient.setQueryData(['products'], old => [...old, newProduct]);
+    };
+
+    const handleProductDeleted = (deletedId) => {
+      queryClient.setQueryData(['products'], old =>
+        old.filter(product => product._id !== deletedId)
+      );
+    };
+
     socket.on('productVisibilityChanged', handleVisibilityChange);
+    socket.on('productCreated', handleProductCreated);
+    socket.on('productDeleted', handleProductDeleted);
 
     return () => {
       socket.off('productVisibilityChanged', handleVisibilityChange);
+      socket.off('productCreated', handleProductCreated);
+      socket.off('productDeleted', handleProductDeleted);
     };
   }, [socket, queryClient]);
 
@@ -371,7 +397,6 @@ const ProductList = () => {
                     <CreateProduct 
                       onCreated={(newProduct) => {
                         setShowPopup(false);
-                        queryClient.invalidateQueries(['products']);
                         toast.success('Product created successfully');
                       }}
                       onClose={() => setShowPopup(false)}

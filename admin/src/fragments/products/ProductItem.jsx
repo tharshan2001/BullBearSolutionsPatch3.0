@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import io from "socket.io-client";
+import React, { useState } from "react";
 
 const ProductItem = ({
   product,
@@ -11,41 +10,13 @@ const ProductItem = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editedProduct, setEditedProduct] = useState({ ...product });
   const [isHovered, setIsHovered] = useState(false);
-  const [socket, setSocket] = useState(null);
-  const [currentProduct, setCurrentProduct] = useState(product);
 
-  const API_BASE_URL =
-    import.meta.env.VITE_API_BASE_URL;
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-  useEffect(() => {
-    const newSocket = io(
-      import.meta.env.VITE_API_BASE_URL
-    );
-    setSocket(newSocket);
-
-    // Clean up on unmount
-    return () => newSocket.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    // Listen for product updates from server
-    socket.on("productUpdated", (updatedProduct) => {
-      if (updatedProduct._id === currentProduct._id) {
-        setCurrentProduct(updatedProduct);
-      }
-    });
-
-    return () => {
-      socket.off("productUpdated");
-    };
-  }, [socket, currentProduct._id]);
-
-  const discountedPrice =
-    currentProduct.discount > 0
-      ? (currentProduct.Price * (100 - currentProduct.discount)) / 100
-      : currentProduct.Price;
+  // Safely calculate discounted price with fallbacks
+  const price = product.price || product.Price || 0;
+  const discount = product.discount || 0;
+  const discountedPrice = discount > 0 ? (price * (100 - discount)) / 100 : price;
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -59,37 +30,17 @@ const ProductItem = ({
     e.preventDefault();
     await onEdit(editedProduct);
     setIsEditing(false);
-    // Emit update to server
-    if (socket) {
-      socket.emit("updateProduct", editedProduct);
-    }
   };
 
-  const handleToggleHide = async () => {
-    const updatedHiddenStatus = !currentProduct.isHidden;
-    const updatedProduct = {
-      ...currentProduct,
-      isHidden: updatedHiddenStatus,
-    };
-
-    try {
-      await onToggleHide(currentProduct._id, updatedHiddenStatus);
-      setCurrentProduct(updatedProduct);
-
-      // Emit update to server
-      if (socket) {
-        socket.emit("updateProduct", updatedProduct);
-      }
-    } catch (error) {
-      console.error("Error toggling hide status:", error);
-    }
+  const handleToggleHideLocal = async () => {
+    await onToggleHide(product._id, product.isHidden);
   };
 
   return (
     <div
       className={`relative border rounded-xl p-5 transition-all duration-200 ${
         isHovered ? "shadow-lg transform -translate-y-1" : "shadow-md"
-      } ${currentProduct.isHidden ? "bg-gray-50 opacity-90" : "bg-white"}`}
+      } ${product.isHidden ? "bg-gray-50 opacity-90" : "bg-white"}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -103,7 +54,7 @@ const ProductItem = ({
               <input
                 type="text"
                 name="Title"
-                value={editedProduct.Title}
+                value={editedProduct.Title || ""}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
               />
@@ -114,8 +65,8 @@ const ProductItem = ({
               </label>
               <input
                 type="number"
-                name="Price"
-                value={editedProduct.Price}
+                name="price"
+                value={editedProduct.price || editedProduct.Price || ""}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
               />
@@ -127,7 +78,7 @@ const ProductItem = ({
               <input
                 type="number"
                 name="discount"
-                value={editedProduct.discount}
+                value={editedProduct.discount || 0}
                 onChange={handleInputChange}
                 min="0"
                 max="100"
@@ -141,7 +92,7 @@ const ProductItem = ({
               <input
                 type="text"
                 name="category"
-                value={editedProduct.category}
+                value={editedProduct.category || ""}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
               />
@@ -150,7 +101,7 @@ const ProductItem = ({
               <input
                 type="checkbox"
                 name="isAvailable"
-                checked={editedProduct.isAvailable}
+                checked={editedProduct.isAvailable || false}
                 onChange={handleInputChange}
                 className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
               />
@@ -162,7 +113,7 @@ const ProductItem = ({
               <input
                 type="checkbox"
                 name="isHidden"
-                checked={editedProduct.isHidden}
+                checked={editedProduct.isHidden || false}
                 onChange={handleInputChange}
                 className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
               />
@@ -175,7 +126,7 @@ const ProductItem = ({
             </label>
             <textarea
               name="description"
-              value={editedProduct.description}
+              value={editedProduct.description || ""}
               onChange={handleInputChange}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
@@ -188,7 +139,7 @@ const ProductItem = ({
             <input
               type="text"
               name="tags"
-              value={editedProduct.tags?.join(", ")}
+              value={(editedProduct.tags || []).join(", ")}
               onChange={(e) =>
                 handleInputChange({
                   target: {
@@ -223,26 +174,26 @@ const ProductItem = ({
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
-                    {currentProduct.Title}
+                    {product.Title || "Untitled Product"}
                   </h3>
                   <p className="text-gray-600 text-sm mt-1">
-                    {currentProduct.description}
+                    {product.description || "No description available"}
                   </p>
                 </div>
                 <div className="flex flex-col items-end space-y-1">
-                  {currentProduct.discount > 0 && (
+                  {discount > 0 && (
                     <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded-full">
-                      {currentProduct.discount}% OFF
+                      {discount}% OFF
                     </span>
                   )}
                   <span
                     className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                      currentProduct.isAvailable
+                      product.isAvailable
                         ? "bg-green-100 text-green-800"
                         : "bg-red-100 text-red-800"
                     }`}
                   >
-                    {currentProduct.isAvailable ? "In Stock" : "Out of Stock"}
+                    {product.isAvailable ? "In Stock" : "Out of Stock"}
                   </span>
                 </div>
               </div>
@@ -251,18 +202,20 @@ const ProductItem = ({
                 <span className="text-xl font-bold text-gray-900">
                   ${discountedPrice.toFixed(2)}
                 </span>
-                {currentProduct.discount > 0 && (
+                {discount > 0 && (
                   <span className="ml-2 text-sm text-gray-500 line-through">
-                    ${currentProduct.Price.toFixed(2)}
+                    ${price.toFixed(2)}
                   </span>
                 )}
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                  {currentProduct.category}
-                </span>
-                {currentProduct.tags?.map((tag, index) => (
+                {product.category && (
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                    {product.category}
+                  </span>
+                )}
+                {(product.tags || []).map((tag, index) => (
                   <span
                     key={index}
                     className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full"
@@ -273,15 +226,15 @@ const ProductItem = ({
               </div>
             </div>
 
-            {currentProduct.image && (
+            {product.image && (
               <div className="flex-shrink-0">
                 <img
                   src={
-                    currentProduct.image.startsWith("http")
-                      ? currentProduct.image
-                      : `${API_BASE_URL}${currentProduct.image}`
+                    product.image.startsWith("http")
+                      ? product.image
+                      : `${API_BASE_URL}${product.image}`
                   }
-                  alt={currentProduct.Title}
+                  alt={product.Title || "Product image"}
                   className="w-24 h-24 object-cover rounded-lg border-2 border-teal-600"
                 />
               </div>
@@ -291,19 +244,18 @@ const ProductItem = ({
           <div className="mt-5 flex justify-between items-center">
             <div className="flex items-center">
               <span className="mr-2 text-sm text-gray-600">
-                {currentProduct.isHidden ? "Hidden" : "Visible"}
+                {product.isHidden ? "Hidden" : "Visible"}
               </span>
               <button
-                onClick={handleToggleHide}
+                onClick={handleToggleHideLocal}
                 type="button"
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 ${
-                  currentProduct.isHidden ? "bg-gray-200" : "bg-teal-600"
+                  product.isHidden ? "bg-gray-200" : "bg-teal-600"
                 }`}
-                disabled={!socket}
               >
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    currentProduct.isHidden ? "translate-x-1" : "translate-x-6"
+                    product.isHidden ? "translate-x-1" : "translate-x-6"
                   }`}
                 />
               </button>
@@ -317,7 +269,7 @@ const ProductItem = ({
                 Edit
               </button>
               <button
-                onClick={() => onDelete(currentProduct)}
+                onClick={() => onDelete(product)}
                 disabled={isDeleting}
                 className={`px-3 py-1 border border-red-600 rounded-md text-sm font-medium ${
                   isDeleting

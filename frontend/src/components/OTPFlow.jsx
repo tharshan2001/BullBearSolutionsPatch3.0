@@ -1,10 +1,15 @@
-import { ArrowRightOutlined, EyeInvisibleOutlined, EyeTwoTone } from "@ant-design/icons";
+import {
+  ArrowRightOutlined,
+  EyeInvisibleOutlined,
+  EyeTwoTone,
+} from "@ant-design/icons";
 import { Button, Form, Input } from "antd";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { debounce } from "lodash";
+import logo from "../assets/v3.png";
 
 const OTPFlow = () => {
   const [form1] = Form.useForm();
@@ -31,32 +36,21 @@ const OTPFlow = () => {
 
   const validateFields = useCallback(
     debounce(() => {
+      // Only validate email in step 1
       if (currentStep === 1) {
         try {
           const allValues = form1.getFieldsValue();
           setFormValid(
-            !!allValues.email && 
-            /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(allValues.email)
-          );
-        } catch (error) {
-          setFormValid(false);
-        }
-      } else if (currentStep === 3) {
-        try {
-          const password = form3.getFieldValue("password");
-          const confirmPassword = form3.getFieldValue("confirmPassword");
-          setFormValid(
-            password &&
-            password.length >= 8 &&
-            confirmPassword &&
-            password === confirmPassword
+            !!allValues.email &&
+              /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(allValues.email)
           );
         } catch (error) {
           setFormValid(false);
         }
       }
+      // For step 3, we'll validate only on submit, not during typing
     }, 300),
-    [form1, form3, currentStep]
+    [form1, currentStep]
   );
 
   const onFieldsChange = useCallback(() => {
@@ -67,12 +61,13 @@ const OTPFlow = () => {
     if (currentStep === 2 && inputRefs.current[0]) {
       inputRefs.current[0].focus();
     }
-    
+
     if (currentStep === 3 && prevStepRef.current !== 3) {
       form3.resetFields();
-      setFormValid(false);
+      // Enable the button by default in step 3
+      setFormValid(true);
     }
-    
+
     prevStepRef.current = currentStep;
   }, [currentStep, form3]);
 
@@ -198,7 +193,8 @@ const OTPFlow = () => {
       if (response.data === true) {
         toast.success("OTP verified!");
         setCurrentStep(3);
-        setFormValid(false);
+        // Enable the button by default in step 3
+        setFormValid(true);
         setOtpExpiry(null);
       } else {
         toast.error("Invalid or expired OTP");
@@ -211,6 +207,17 @@ const OTPFlow = () => {
   };
 
   const resetPassword = async (values) => {
+    // Final validation before submission
+    if (!values.password || values.password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+
+    if (values.password !== values.confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await axios.post(
@@ -264,9 +271,7 @@ const OTPFlow = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1f1f2f] via-[#191c2d] to-[#101015] p-4">
       <div className="backdrop-blur-xl bg-[rgba(25,28,45,0.75)] rounded-2xl p-8 shadow-[0_8px_32px_rgba(0,0,0,0.4)] w-full max-w-md">
         <div className="text-center mb-4">
-          <h2 className="text-[#33eed5] text-2xl font-bold font-[Luckiest_Guy]">
-            BULL BEAR
-          </h2>
+          <img src={logo} alt="Bull Bear Logo" className="h-20 mx-auto" />
         </div>
         <div className="bg-[rgba(26,27,32,0.75)] p-5 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.2)] backdrop-blur-md">
           {currentStep === 1 && (
@@ -328,9 +333,7 @@ const OTPFlow = () => {
                 We've sent a 6-digit code to{" "}
                 <span className="text-[#33eed5]">{email}</span>
                 {otpExpiry && (
-                  <div className="text-xs mt-1">
-                    OTP expires at: {new Date(otpExpiry).toLocaleTimeString()}
-                  </div>
+                  <div className="text-xs mt-1">OTP expires in 2 Minutes</div>
                 )}
               </div>
               <Form onFinish={verifyOTP}>
@@ -393,7 +396,7 @@ const OTPFlow = () => {
                 form={form3}
                 layout="vertical"
                 onFinish={resetPassword}
-                onFieldsChange={onFieldsChange}
+                // Remove onFieldsChange for step 3 to prevent validation on every keystroke
               >
                 <FormItemNoAsterisk
                   name="password"
@@ -406,6 +409,7 @@ const OTPFlow = () => {
                 >
                   <Input.Password
                     placeholder="Enter new password"
+                    maxLength={32}
                     visibilityToggle={{
                       visible: showPassword,
                       onVisibleChange: setShowPassword,
@@ -446,6 +450,7 @@ const OTPFlow = () => {
                 >
                   <Input.Password
                     placeholder="Confirm new password"
+                    maxLength={32}
                     visibilityToggle={{
                       visible: showConfirmPassword,
                       onVisibleChange: setShowConfirmPassword,
@@ -472,7 +477,8 @@ const OTPFlow = () => {
                     className="!bg-[#33eed5] !border-[#33eed5] shadow-[0_2px_6px_rgba(51,238,213,0.4)] float-right"
                     htmlType="submit"
                     loading={loading}
-                    disabled={!formValid || loading}
+                    // Always enabled in step 3, validation happens on submit
+                    disabled={loading}
                   />
                 </Form.Item>
               </Form>

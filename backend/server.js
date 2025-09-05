@@ -53,6 +53,8 @@ const allowedOrigins = [
   process.env.FRONTEND_URL_USER,
 ].filter(Boolean);
 
+console.log("✅ Allowed Origins:", allowedOrigins);
+
 // CORS middleware with error handling
 app.use(
   cors({
@@ -64,7 +66,7 @@ app.use(
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       } else {
-        console.warn(`Blocked CORS request from origin: ${origin}`);
+        console.warn(`🚫 Blocked CORS request from origin: ${origin}`);
         return callback(new Error("Not allowed by CORS"));
       }
     },
@@ -150,12 +152,12 @@ const socketAllowedOrigins = allowedOrigins;
 const io = new SocketIO(server, {
   cors: {
     origin: (origin, callback) => {
-      console.log("Socket.IO origin:", origin);
+      console.log("🔌 Socket.IO origin:", origin);
       if (!origin) return callback(null, true);
       if (socketAllowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      console.warn(`Socket.IO CORS blocked origin: ${origin}`);
+      console.warn(`🚫 Socket.IO CORS blocked origin: ${origin}`);
       callback(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST"],
@@ -163,12 +165,10 @@ const io = new SocketIO(server, {
   },
 });
 
-
-
 app.set("io", io);
 
 io.on("connection", (socket) => {
-  console.log(`🔌 Client connected: ${socket.id}`);
+  console.log(`⚡ Client connected: ${socket.id}`);
 
   socket.on("disconnect", () => {
     console.log(`❌ Client disconnected: ${socket.id}`);
