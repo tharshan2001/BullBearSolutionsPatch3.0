@@ -4,8 +4,6 @@ import cors from "cors";
 import connectDB from "./utils/db.js";
 import cookieParser from "cookie-parser";
 import cron from "node-cron";
-import http from "http";
-import { Server as SocketIO } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
@@ -144,41 +142,10 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-// Create HTTP + Socket.IO server
-const server = http.createServer(app);
-
-// Setup Socket.IO allowed origins same as HTTP allowedOrigins
-const socketAllowedOrigins = allowedOrigins;
-const io = new SocketIO(server, {
-  cors: {
-    origin: (origin, callback) => {
-      console.log("🔌 Socket.IO origin:", origin);
-      if (!origin) return callback(null, true);
-      if (socketAllowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      console.warn(`🚫 Socket.IO CORS blocked origin: ${origin}`);
-      callback(new Error("Not allowed by CORS"));
-    },
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-});
-
-app.set("io", io);
-
-io.on("connection", (socket) => {
-  console.log(`⚡ Client connected: ${socket.id}`);
-
-  socket.on("disconnect", () => {
-    console.log(`❌ Client disconnected: ${socket.id}`);
-  });
-});
-
 // Start server
 const PORT = process.env.PORT || 5030;
 const DOMAIN = process.env.DOMAIN || "http://localhost";
 
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`🚀 Server running at ${DOMAIN}:${PORT}`);
 });

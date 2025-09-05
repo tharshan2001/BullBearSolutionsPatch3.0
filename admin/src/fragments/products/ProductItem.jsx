@@ -13,8 +13,8 @@ const ProductItem = ({
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-  // Safely calculate discounted price with fallbacks
-  const price = product.price || product.Price || 0;
+  // Safely calculate discounted price with correct field names
+  const price = product.Price || product.price || 0;
   const discount = product.discount || 0;
   const discountedPrice = discount > 0 ? (price * (100 - discount)) / 100 : price;
 
@@ -28,7 +28,16 @@ const ProductItem = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await onEdit(editedProduct);
+    // Ensure we send the data in the correct format expected by the backend
+    const productToUpdate = {
+      ...editedProduct,
+      Price: parseFloat(editedProduct.price || editedProduct.Price), // Ensure Price is sent
+    };
+    
+    // Remove the lowercase price field if it exists to avoid conflicts
+    delete productToUpdate.price;
+    
+    await onEdit(productToUpdate);
     setIsEditing(false);
   };
 
@@ -66,7 +75,7 @@ const ProductItem = ({
               <input
                 type="number"
                 name="price"
-                value={editedProduct.price || editedProduct.Price || ""}
+                value={editedProduct.Price || editedProduct.price || ""}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
               />
@@ -236,6 +245,9 @@ const ProductItem = ({
                   }
                   alt={product.Title || "Product image"}
                   className="w-24 h-24 object-cover rounded-lg border-2 border-teal-600"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
                 />
               </div>
             )}
@@ -269,7 +281,7 @@ const ProductItem = ({
                 Edit
               </button>
               <button
-                onClick={() => onDelete(product)}
+                onClick={() => onDelete(product._id)}
                 disabled={isDeleting}
                 className={`px-3 py-1 border border-red-600 rounded-md text-sm font-medium ${
                   isDeleting

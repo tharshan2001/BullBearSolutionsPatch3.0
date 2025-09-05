@@ -1,25 +1,30 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useAdminAuth } from '../../context/AdminAuthContext';
-import axios from 'axios';
-import { io } from 'socket.io-client';
-import ProductItem from './ProductItem';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import CreateProduct from './CreateProduct';
-import { FaSpinner, FaExclamationTriangle, FaMoneyCheck, FaSearch, FaPlus } from 'react-icons/fa';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect, useMemo } from "react";
+import { useAdminAuth } from "../../context/AdminAuthContext";
+import axios from "axios";
+import ProductItem from "./ProductItem";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import CreateProduct from "./CreateProduct";
+import {
+  FaSpinner,
+  FaExclamationTriangle,
+  FaMoneyCheck,
+  FaSearch,
+  FaPlus,
+} from "react-icons/fa";
+import { toast } from "react-hot-toast";
 
 // Move axios.create outside the component to prevent recreation on every render
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   withCredentials: true,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
 API.interceptors.response.use(
-  response => response,
-  error => {
+  (response) => response,
+  (error) => {
     if (error.response && error.response.status === 401) {
       // Error will be handled by individual components
     }
@@ -28,12 +33,13 @@ API.interceptors.response.use(
 );
 
 const ProductList = () => {
-  const [socket, setSocket] = useState(null);
   const [error, setError] = useState(null);
   const { isAuthenticated, loading: authLoading } = useAdminAuth();
   const queryClient = useQueryClient();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [showPopup, setShowPopup] = useState(false);
+
+
 
   const {
     data: products = [],
@@ -41,13 +47,19 @@ const ProductList = () => {
     isError,
     error: queryError,
   } = useQuery({
-    queryKey: ['products'],
+    queryKey: ["products"],
     queryFn: async () => {
-      const response = await API.get('/api/products');
-      return response.data;  
+      try {
+        const response = await API.get("/api/products");
+        return response.data.products || [];
+      } catch (error) {
+        toast.error("Failed to load products");
+        return [];
+      }
     },
     retry: 2,
   });
+
 
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
@@ -55,130 +67,106 @@ const ProductList = () => {
       return response.data;
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries(['products']);
-      const previous = queryClient.getQueryData(['products']);
-      queryClient.setQueryData(['products'], old =>
-        old.filter(p => p._id !== id)
+      await queryClient.cancelQueries(["products"]);
+      const previous = queryClient.getQueryData(["products"]);
+      queryClient.setQueryData(["products"], (old) =>
+        old.filter((p) => p._id !== id)
       );
       return { previous };
     },
     onError: (err, id, context) => {
       setError(err.message);
-      toast.error(err.message || 'Failed to delete product');
+      toast.error(err.message || "Failed to delete product");
       if (context?.previous) {
-        queryClient.setQueryData(['products'], context.previous);
+        queryClient.setQueryData(["products"], context.previous);
       }
     },
     onSuccess: () => {
-      toast.success('Product deleted successfully');
+      toast.success("Product deleted successfully");
     },
-    // Removed onSettled invalidateQueries - optimistic update is sufficient
   });
 
   const editMutation = useMutation({
     mutationFn: (updatedProduct) =>
       API.put(`/api/products/update/${updatedProduct._id}`, updatedProduct),
     onMutate: async (updatedProduct) => {
-      await queryClient.cancelQueries(['products']);
-      const previous = queryClient.getQueryData(['products']);
-      queryClient.setQueryData(['products'], old =>
-        old.map(product =>
-          product._id === updatedProduct._id ? { ...product, ...updatedProduct } : product
+      await queryClient.cancelQueries(["products"]);
+      const previous = queryClient.getQueryData(["products"]);
+      queryClient.setQueryData(["products"], (old) =>
+        old.map((product) =>
+          product._id === updatedProduct._id
+            ? { ...product, ...updatedProduct }
+            : product
         )
       );
       return { previous };
     },
     onError: (err, updatedProduct, context) => {
-      setError(err.response?.data?.message || 'Failed to update product');
-      toast.error(err.response?.data?.message || 'Failed to update product');
+      setError(err.response?.data?.message || "Failed to update product");
+      toast.error(err.response?.data?.message || "Failed to update product");
       if (context?.previous) {
-        queryClient.setQueryData(['products'], context.previous);
+        queryClient.setQueryData(["products"], context.previous);
       }
     },
     onSuccess: () => {
       setError(null);
-      toast.success('Product updated successfully');
+      toast.success("Product updated successfully");
     },
-    // Removed invalidateQueries - optimistic update is sufficient
   });
 
-  useEffect(() => {
-    const newSocket = io(import.meta.env.VITE_API_BASE_URL, {
-      withCredentials: true,
-    });
-    setSocket(newSocket);
-
-    return () => newSocket.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleVisibilityChange = (updatedProduct) => {
-      queryClient.setQueryData(['products'], old =>
-        old.map(product =>
-          product._id === updatedProduct._id ? updatedProduct : product
+  const toggleHideMutation = useMutation({
+    mutationFn: async ({ id, isHidden }) => {
+      const response = await API.patch(`/api/products/enable/${id}`, { isHidden });
+      return response.data;
+    },
+    onMutate: async ({ id, isHidden }) => {
+      await queryClient.cancelQueries(["products"]);
+      const previous = queryClient.getQueryData(["products"]);
+      queryClient.setQueryData(["products"], (old) =>
+        old.map((product) =>
+          product._id === id ? { ...product, isHidden } : product
         )
       );
-    };
-
-    const handleProductCreated = (newProduct) => {
-      queryClient.setQueryData(['products'], old => [...old, newProduct]);
-    };
-
-    const handleProductDeleted = (deletedId) => {
-      queryClient.setQueryData(['products'], old =>
-        old.filter(product => product._id !== deletedId)
-      );
-    };
-
-    socket.on('productVisibilityChanged', handleVisibilityChange);
-    socket.on('productCreated', handleProductCreated);
-    socket.on('productDeleted', handleProductDeleted);
-
-    return () => {
-      socket.off('productVisibilityChanged', handleVisibilityChange);
-      socket.off('productCreated', handleProductCreated);
-      socket.off('productDeleted', handleProductDeleted);
-    };
-  }, [socket, queryClient]);
+      return { previous };
+    },
+    onError: (err, variables, context) => {
+      setError(err.response?.data?.message || "Failed to toggle product visibility");
+      toast.error(err.response?.data?.message || "Failed to toggle product visibility");
+      if (context?.previous) {
+        queryClient.setQueryData(["products"], context.previous);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Product visibility updated successfully");
+    },
+  });
 
   const handleToggleHide = async (id, isHidden) => {
     if (!isAuthenticated) {
-      setError('You must be logged in to toggle product visibility');
-      toast.error('You must be logged in to toggle product visibility');
+      setError("You must be logged in to toggle product visibility");
+      toast.error("You must be logged in to toggle product visibility");
       return;
     }
 
     try {
-      queryClient.setQueryData(['products'], old =>
-        old.map(product =>
-          product._id === id ? { ...product, isHidden: !isHidden } : product
-        )
-      );
-
-      await API.patch(`/api/products/enable/${id}`, { isHidden: !isHidden });
-      toast.success(`Product ${!isHidden ? 'hidden' : 'visible'} successfully`);
+      await toggleHideMutation.mutateAsync({ id, isHidden: !isHidden });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to toggle product visibility');
-      toast.error(err.response?.data?.message || 'Failed to toggle product visibility');
-
-      queryClient.setQueryData(['products'], old =>
-        old.map(product =>
-          product._id === id ? { ...product, isHidden } : product
-        )
-      );
+      // error handled by mutation
     }
   };
 
   const handleDelete = async (id) => {
     if (!isAuthenticated) {
-      setError('You must be logged in to delete products');
-      toast.error('You must be logged in to delete products');
+      setError("You must be logged in to delete products");
+      toast.error("You must be logged in to delete products");
       return;
     }
 
-    if (window.confirm('Are you sure you want to permanently delete this product?')) {
+    if (
+      window.confirm(
+        "Are you sure you want to permanently delete this product?"
+      )
+    ) {
       try {
         await deleteMutation.mutateAsync(id);
       } catch (err) {
@@ -189,8 +177,8 @@ const ProductList = () => {
 
   const handleEdit = (updatedProduct) => {
     if (!isAuthenticated) {
-      setError('You must be logged in to edit products');
-      toast.error('You must be logged in to edit products');
+      setError("You must be logged in to edit products");
+      toast.error("You must be logged in to edit products");
       return;
     }
     editMutation.mutate(updatedProduct);
@@ -203,29 +191,37 @@ const ProductList = () => {
     const term = searchTerm.toLowerCase();
 
     const searchableFields = [
-      'Title',
-      'description',
-      '_id',
-      'category',
-      'price',
-      'discount',
-      'sellingCount',
-      'tags',
+      "Title",
+      "description",
+      "_id",
+      "category",
+      "Price",
+      "price",
+      "discount",
+      "sellingCount",
+      "tags",
     ];
 
-    return products.filter(product => {
-      return searchableFields.some(field => {
+    return products.filter((product) => {
+      return searchableFields.some((field) => {
         const value = product[field];
         if (value === undefined || value === null) return false;
 
         if (Array.isArray(value)) {
-          return value.some(item => String(item).toLowerCase().includes(term));
+          return value.some((item) =>
+            String(item).toLowerCase().includes(term)
+          );
         }
 
         return String(value).toLowerCase().includes(term);
       });
     });
   }, [products, searchTerm]);
+
+  // Add a manual refresh function
+  const handleRefresh = () => {
+    queryClient.invalidateQueries(["products"]);
+  };
 
   if (authLoading || isLoading) {
     return (
@@ -245,10 +241,7 @@ const ProductList = () => {
             <strong>Error loading products:</strong>
             <p className="mt-1">{error || queryError?.message}</p>
             <button
-              onClick={() => {
-                setError(null);
-                queryClient.refetchQueries(["products"]);
-              }}
+              onClick={handleRefresh}
               className="mt-2 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm transition-colors"
             >
               Retry
@@ -266,9 +259,11 @@ const ProductList = () => {
           <FaMoneyCheck className="mr-2 text-xl text-gray-500" />
           <div>
             <strong>No products found</strong>
-            <p className="mt-1 text-sm">There are currently no products to display.</p>
+            <p className="mt-1 text-sm">
+              There are currently no products to display.
+            </p>
             <button
-              onClick={() => queryClient.invalidateQueries(['products'])}
+              onClick={handleRefresh}
               className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-500 transition-colors"
             >
               Refresh
@@ -289,7 +284,8 @@ const ProductList = () => {
             Product Catalog
           </h2>
           <p className="text-gray-500">
-            {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'} found
+            {filteredProducts.length}{" "}
+            {filteredProducts.length === 1 ? "product" : "products"} found
           </p>
         </div>
 
@@ -306,7 +302,7 @@ const ProductList = () => {
             <FaSearch className="absolute left-3 top-3 text-gray-400" />
             {searchTerm && (
               <button
-                onClick={() => setSearchTerm('')}
+                onClick={() => setSearchTerm("")}
                 className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
               >
                 ×
@@ -330,14 +326,19 @@ const ProductList = () => {
 
         {/* Product Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProducts.map(product => (
+          {filteredProducts.map((product) => (
             <ProductItem
               key={product._id}
               product={product}
               onEdit={isAuthenticated ? handleEdit : null}
-              onDelete={isAuthenticated ? () => handleDelete(product._id) : null}
+              onDelete={
+                isAuthenticated ? () => handleDelete(product._id) : null
+              }
               onToggleHide={isAuthenticated ? handleToggleHide : null}
-              isDeleting={deleteMutation.isLoading && deleteMutation.variables === product._id}
+              isDeleting={
+                deleteMutation.isLoading &&
+                deleteMutation.variables === product._id
+              }
             />
           ))}
         </div>
@@ -346,10 +347,12 @@ const ProductList = () => {
         {filteredProducts.length === 0 && searchTerm && (
           <div className="text-center py-12 text-gray-500">
             <div className="text-4xl mb-4">🔍</div>
-            <h3 className="text-lg font-medium text-gray-700">No products match your search</h3>
+            <h3 className="text-lg font-medium text-gray-700">
+              No products match your search
+            </h3>
             <p className="mt-1">Try adjusting your search term</p>
             <button
-              onClick={() => setSearchTerm('')}
+              onClick={() => setSearchTerm("")}
               className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-500 transition-colors"
             >
               Clear search
@@ -372,20 +375,27 @@ const ProductList = () => {
         {showPopup && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div 
-                className="fixed inset-0 transition-opacity" 
+              <div
+                className="fixed inset-0 transition-opacity"
                 aria-hidden="true"
                 onClick={() => setShowPopup(false)}
               >
                 <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm"></div>
               </div>
-              
-              <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-              
+
+              <span
+                className="hidden sm:inline-block sm:align-middle sm:h-screen"
+                aria-hidden="true"
+              >
+                &#8203;
+              </span>
+
               <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-200">
                 <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <div className="flex justify-between items-start">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">Add New Product</h3>
+                    <h3 className="text-lg leading-6 font-medium text-gray-900">
+                      Add New Product
+                    </h3>
                     <button
                       onClick={() => setShowPopup(false)}
                       className="text-gray-400 hover:text-gray-500 focus:outline-none"
@@ -394,10 +404,12 @@ const ProductList = () => {
                     </button>
                   </div>
                   <div className="mt-4">
-                    <CreateProduct 
+                    <CreateProduct
                       onCreated={(newProduct) => {
                         setShowPopup(false);
-                        toast.success('Product created successfully');
+                        toast.success("Product created successfully");
+                        // Refresh the product list
+                        queryClient.invalidateQueries(["products"]);
                       }}
                       onClose={() => setShowPopup(false)}
                     />
