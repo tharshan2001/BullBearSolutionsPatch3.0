@@ -14,6 +14,7 @@ import NetworkAddressesList from "./fragments/addresses/NetworkAddressesList";
 import ResourcesTable from "./fragments/resource/ResourcesTable";
 import HelpCenterMessages from "./fragments/helpcenter/HelpCenterMessages";
 import AdminUserSearch from "./fragments/user/AdminUserSearch";
+import AdminLayout from "./fragments/AdminLayout";
 
 const App = () => {
   return (
@@ -63,6 +64,7 @@ const App = () => {
           
         </Route>
       </Routes>
+      <AdminLayout/>
     </AdminAuthProvider>
   );
 };
